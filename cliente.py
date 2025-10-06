@@ -8,6 +8,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from dotenv import load_dotenv
 import json
+from fastapi.middleware.cors import CORSMiddleware
 
 # --- 1. Cargar variables de entorno ---
 load_dotenv()
@@ -15,6 +16,20 @@ if not os.getenv("GOOGLE_API_KEY"):
     raise RuntimeError(" Falta GOOGLE_API_KEY en el entorno. Crea un archivo .env con tu clave.")
 
 app = FastAPI()
+
+#permite todos los cors
+origins = [
+    "http://127.0.0.1:5500",  # Tu Live Server
+    "http://localhost:5500",  # A veces Live Server usa localhost
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- 2. Tools que Gemini puede elegir ---
 
@@ -29,12 +44,24 @@ class BuscarProductoPorIdTool(BaseTool):
     def call(self, id: int) -> str:
         return f"BuscarProductoPorIdTool seleccionada con id={id}."
 
-
 class BuscarProductoPorNombreTool(BaseTool):
-    """Busca un producto por su nombre llamando al microservicio de Spring Boot."""
+    """
+    Herramienta para obtener información de un producto a partir de su nombre.
+
+    El usuario puede pedir el producto de distintas formas, incluyendo sinónimos,
+    errores ortográficos o expresiones naturales. 
+    Ejemplos de frases que deben activar esta herramienta:
+      - "Búscame el helado de fresa"
+      - "Pásame el halado de fresa"
+      - "Muéstrame el producto fresa"
+      - "Dame el helado de chocolate"
+      - "Quiero ver el producto con nombre vainilla"
+
+    Esta herramienta llama al microservicio de Spring Boot que busca el producto
+    por su nombre exacto o similar en la base de datos.
+    """
     def call(self, nombre: str) -> str:
         return f"BuscarProductoPorNombreTool seleccionada con nombre={nombre}."
-
 
 class BuscarProductoPorPrecioTool(BaseTool):
     """Busca productos por precio con condición (mayor, menor o igual) llamando al microservicio de Spring Boot."""

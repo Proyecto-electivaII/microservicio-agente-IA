@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat con Agente de IA</title>
+    <style>
+        /* --- ESTILOS GENERALES --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow: hidden; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 100%);
+            color: #f0f0f0; 
+        }
+        .app-container { 
+            display: flex; 
+            height: 100vh; 
+            position: relative;
+        }
+
+        /* --- COLUMNA DEL AGENTE (CHAT) --- */
+        #agent-log {
+            flex: 0 0 380px;
+            background: linear-gradient(180deg, #1e1435 0%, #2a1f47 100%);
+            padding: 25px;
+            border-right: 3px solid #a855f7;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 5px 0 25px rgba(168, 85, 247, 0.3);
+            position: relative;
+            z-index: 10;
+        }
+        
+        #agent-log::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #a855f7, #ec4899, #a855f7);
+            animation: shimmer 3s infinite;
+        }
+
+        #agent-log h2 { 
+            margin-bottom: 25px; 
+            text-align: center; 
+            color: #e9d5ff;
+            font-size: 1.8em;
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+            letter-spacing: 1px;
+        }
+        
+        .log-messages { 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            padding-right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .log-messages::-webkit-scrollbar { width: 8px; }
+        .log-messages::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 10px; }
+        .log-messages::-webkit-scrollbar-thumb { background: #a855f7; border-radius: 10px; }
+        
+        /* Estilos de Mensajes */
+        .log-message, .user-message {
+            padding: 14px 18px;
+            border-radius: 18px;
+            max-width: 85%;
+            opacity: 0;
+            animation: slideIn 0.4s forwards;
+            line-height: 1.5;
+            font-size: 0.95em;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .log-message { 
+            background: linear-gradient(135deg, #9333ea 0%, #a855f7 100%);
+            color: white;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .user-message { 
+            background: linear-gradient(135deg, #4c1d95 0%, #6b21a8 100%);
+            color: white;
+            align-self: flex-end;
+            text-align: right;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* Campo de texto para el chat */
+        #chat-input-container { 
+            margin-top: 20px; 
+            padding-top: 20px; 
+            border-top: 2px solid rgba(168, 85, 247, 0.3);
+        }
+        
+        #chat-input {
+            width: 100%;
+            padding: 15px 20px;
+            border-radius: 25px;
+            border: 2px solid #7c3aed;
+            background: rgba(124, 58, 237, 0.15);
+            color: #f0f0f0;
+            font-size: 0.95em;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        #chat-input:focus { 
+            outline: none; 
+            border-color: #a855f7;
+            background: rgba(168, 85, 247, 0.2);
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+        }
+        
+        #chat-input::placeholder {
+            color: rgba(240, 240, 240, 0.5);
+        }
+
+        /* --- ÁREA DE CONTENIDO PRINCIPAL --- */
+        #main-content { 
+            flex-grow: 1; 
+            background: linear-gradient(135deg, #d0b3ff 0%, #8566b6 25%, #8a2be2 50%, #4b0082 75%, #08000d 100%);
+            padding: 50px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #main-content::before {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            top: -200px;
+            right: -200px;
+            animation: pulse 4s infinite;
+        }
+
+        #main-content::after {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(236, 72, 153, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            bottom: -150px;
+            left: -150px;
+            animation: pulse 5s infinite;
+        }
+
+        #product-display { 
+            width: 100%; 
+            max-width: 900px; 
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .product-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 25px;
+            padding: 20px;
+        }
+        
+        .product-card { 
+            background: linear-gradient(135deg, rgba(111, 93, 151, 0.85) 0%, rgba(99, 81, 139, 0.85) 100%);
+            color: #fff;
+            border: 3px solid rgba(168, 85, 247, 0.4);
+            border-radius: 20px; 
+            height: 180px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            font-size: 1.6em; 
+            font-weight: 700; 
+            text-align: center; 
+            opacity: 0; 
+            animation: popIn 0.5s forwards;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .product-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .product-card:hover::before {
+            left: 100%;
+        }
+
+        .product-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: #a855f7;
+            box-shadow: 0 12px 40px rgba(168, 85, 247, 0.4);
+        }
+        
+        .product-detail { 
+            background: linear-gradient(135deg, 1a0b2e);
+            color: #1a0b2e;
+            border: 3px solid #a855f7;
+            border-radius: 25px; 
+            padding: 40px; 
+            font-size: 1.15em; 
+            text-align: left; 
+            opacity: 0; 
+            animation: fadeInScale 0.5s forwards;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
+        }
+        
+        .product-detail h3 { 
+            font-size: 2.3em; 
+            margin-bottom: 25px; 
+            text-align: center;
+            color: #2a1f47;
+            text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.3);
+        }
+        
+        .product-detail p { 
+            margin-bottom: 12px; 
+            line-height: 1.7;
+        }
+        
+        .product-detail strong { 
+            color: #4c1d95;
+            font-size: 1.05em;
+        }
+        
+        .loading-text, .error-text { 
+            font-size: 1.6em; 
+            color: #e9d5ff;
+            text-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+        }
+        
+        .error-text { 
+            color: #fca5a5;
+            text-shadow: 0 0 20px rgba(252, 165, 165, 0.5);
+        }
+        
+        /* Animaciones */
+        @keyframes slideIn { 
+            from { opacity: 0; transform: translateX(-20px); } 
+            to { opacity: 1; transform: translateX(0); } 
+        }
+
+        @keyframes popIn { 
+            from { opacity: 0; transform: scale(0.8); } 
+            to { opacity: 1; transform: scale(1); } 
+        }
+
+        @keyframes fadeInScale { 
+            from { opacity: 0; transform: scale(0.95); } 
+            to { opacity: 1; transform: scale(1); } 
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -100% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* Responsivo */
+        @media (max-width: 768px) {
+            .app-container { flex-direction: column; }
+            #agent-log { flex: 0 0 40%; border-right: none; border-bottom: 3px solid #a855f7; }
+            #main-content { padding: 30px 20px; }
+            .product-grid { grid-template-columns: 1fr; gap: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside id="agent-log">
+            <h2>Agente Admin</h2>
+            <div class="log-messages" id="log-container">
+            </div>
+            <div id="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Escribe tu petición y presiona Enter...">
+            </div>
+        </aside>
+        <main id="main-content">
+            <div id="product-display">
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+    <script>
+        // --- LÓGICA DEL FRONTEND ---
+        const logContainer = document.getElementById('log-container');
+        const displayContainer = document.getElementById('product-display');
+        const chatInput = document.getElementById('chat-input');
+        
+        /**
+         * Realiza la llamada a la API del backend.
+         */
+        async function fetchData(consulta) {
+            const apiUrl = 'http://127.0.0.1:8000/preguntar';
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ texto: consulta }),
+                });
+                if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+                const result = await response.json();
+                console.log("TOTAL VALEN", result);
+                
+                return result; // Devolvemos directamente la data
+            } catch (error) {
+                console.error('Error al conectar con la API:', error);
+                showError(`No se pudo conectar con el agente. Revisa la consola.`);
+                return null;
+            }
+        }
+
+        function showLoading() {
+            displayContainer.innerHTML = `<p class="loading-text">Consultando al agente...</p>`;
+        }
+        
+        function showError(message) {
+            displayContainer.innerHTML = `<p class="error-text">⚠️ ${message}</p>`;
+        }
+
+        // Añade un mensaje DEL AGENTE al log
+        function addAgentMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'log-message';
+            messageDiv.textContent = text;
+            logContainer.appendChild(messageDiv);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Añade un mensaje DEL USUARIO al log
+        function addUserMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'user-message';
+            messageDiv.textContent = text;
+            logContainer.appendChild(messageDiv);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function renderProductGrid(products) {
+            displayContainer.innerHTML = '';
+            if (!products || products.length === 0) {
+                showError("No encontré productos que coincidan con tu búsqueda.");
+                return;
+            }
+            displayContainer.className = 'product-grid';
+            products.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.textContent = product.nombre;
+                displayContainer.appendChild(card);
+            });
+        }
+        
+        function renderProductDetailView(product) {
+            displayContainer.innerHTML = '';
+            if (!product) {
+                 showError('El producto solicitado no fue encontrado.');
+                 return;
+            }
+            displayContainer.className = 'product-detail';
+            displayContainer.innerHTML = `
+                <h3>${product.nombre}</h3>
+                <p><strong>Precio:</strong> ${product.precio.toLocaleString('es-CO', { style: 'currency', currency: 'COP' })}</p>
+            `;
+        }
+
+        /**
+         * Procesa la consulta del usuario, llama a la API y renderiza la respuesta.
+         * @param {string} consulta - El texto ingresado por el usuario.
+         */
+        async function processQuery(consulta) {
+            showLoading();
+            const dataFormat = await fetchData(consulta);
+
+            if(dataFormat == null){
+                showError("Recibí una respuesta inesperada del agente.");
+            }
+            else if (dataFormat.error) {
+                showError(dataFormat.error);
+            }else{
+                // Decidimos cómo renderizar basado en el tipo de dato recibido
+                if (Array.isArray(dataFormat)) {
+                    renderProductGrid(dataFormat);
+                } else if (typeof dataFormat === 'object' && dataFormat !== null) {
+                    renderProductDetailView(dataFormat);
+                } else {
+                    showError("Recibí una respuesta inesperada del agente.");
+                }
+            }
+            
+            // Si data es null, showError ya fue llamado desde fetchData
+        }
+
+        // --- MANEJO DE EVENTOS ---
+        chatInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                const userInput = chatInput.value.trim();
+                if (userInput) {
+                    addUserMessage(userInput);
+                    processQuery(userInput);
+                    chatInput.value = ''; // Limpiar el input
+                }
+            }
+        });
+
+        // --- ESTADO INICIAL ---
+        function startConversation() {
+            addAgentMessage("Hola, soy tu asistente de productos. ¿Qué te gustaría ver hoy?");
+            //processQuery('cuántos productos hay'); // Muestra la vista inicial por defecto
+        }
+
+        startConversation();
+
+    </script>
+</body>
+</html>
