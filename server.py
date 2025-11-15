@@ -1,12 +1,17 @@
 import requests
 from mcp.server.fastmcp import FastMCP, Context
 
+def log_mcp(msg):
+    with open("mcp_debug.log", "a", encoding="utf-8") as f:
+        f.write(msg + "\n")
+
 mcp = FastMCP("MicroserviceServer")
 
 @mcp.tool()
 async def listar_productos_spring(ctx: Context):
     """Obtiene todos los productos desde el microservicio de Spring Boot."""
     resp = requests.get("http://localhost:8080/api/productos/listarProductos")
+
     if resp.status_code == 200:
         return [{"type": "json", "structured": resp.json()}]
     return [{"type": "json", "structured": {"error": "No se pudieron obtener los productos"}}]
@@ -41,6 +46,33 @@ async def buscar_producto_por_precio(ctx: Context, precio: float, condicion: str
     elif resp.status_code == 400:
         return [{"type": "json", "structured": {"error": "Condición inválida"}}]
     return [{"type": "json", "structured": {"error": "No se encontraron productos"}}]
+
+
+
+@mcp.tool()
+async def crear_producto_por_nombre_y_precio(ctx: Context, nombre: str, precio: float):
+    log_mcp(f"Llamada a crear_producto con nombre={nombre}, precio={precio}")
+    url = "http://localhost:8080/api/productos/crear"
+    data = {"nombre": nombre, "precio": precio}
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    try:
+        log_mcp(f"Payload enviado: {data}")
+        resp = requests.post(url, json=data, headers=headers)
+        log_mcp(f"Status code: {resp.status_code}")
+        log_mcp(f"Response headers: {resp.headers}")
+        log_mcp(f"Response body: {resp.text}")
+        if resp.status_code in (200, 201):
+            try:
+                return [{"type": "json", "structured": resp.json()}]
+            except Exception:
+                return [{"type": "json", "structured": {"raw_body": resp.text}}]
+        elif resp.status_code == 400:
+            return [{"type": "json", "structured": {"error": "Datos inválidos", "detalle": resp.text}}]
+        else:
+            return [{"type": "json", "structured": {"error": f"Error {resp.status_code}", "detalle": resp.text}}]
+    except Exception as e:
+        log_mcp(f"Error de conexión: {str(e)}")
+        return [{"type": "json", "structured": {"error": "Error de conexión", "detalle": str(e)}}]
 
 
 if __name__ == "__main__":

@@ -21,10 +21,8 @@ app = FastAPI()
 origins = [
     "http://127.0.0.1:5500",  # Tu Live Server
     "http://localhost:5500",  # A veces Live Server usa localhost
-    "http://127.0.0.1:4200",  # Angular CLI dev server
-    "http://localhost:4200",  # Angular CLI dev server (localhost)
-    "*"  # Permite todos los orígenes (solo para desarrollo)
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -35,57 +33,37 @@ app.add_middleware(
 
 # --- 2. Tools que Gemini puede elegir ---
 
-class ListarProductosSpringTool(BaseTool):
-    """Devuelve la lista de productos registrados en el microservicio de Spring Boot."""
-    def call(self) -> str:
-        return "ListarProductosSpringTool seleccionada."
 
-    
-class BuscarProductoPorIdTool(BaseTool):
-    """Busca un producto por su ID llamando al microservicio de Spring Boot."""
-    def call(self, id: int) -> str:
-        return f"BuscarProductoPorIdTool seleccionada con id={id}."
-
-class BuscarProductoPorNombreTool(BaseTool):
+class CrearProductoPorNombreYPrecioTool(BaseTool):
     """
-    Herramienta para obtener información de un producto a partir de su nombre.
+    Herramienta exclusiva para CREAR, registrar, agregar, añadir o dar de alta un producto nuevo en el microservicio. 
+    Usa esta herramienta SOLO cuando el usuario quiera crear, registrar, agregar, añadir o dar de alta un producto, indicando el nombre (campo 'nombre', texto) y el precio (campo 'precio', número).
 
-    El usuario puede pedir el producto de distintas formas, incluyendo sinónimos,
-    errores ortográficos o expresiones naturales. 
-    Ejemplos de frases que deben activar esta herramienta:
-      - "Búscame el helado de fresa"
-      - "Pásame el halado de fresa"
-      - "Muéstrame el producto fresa"
-      - "Dame el helado de chocolate"
-      - "Quiero ver el producto con nombre vainilla"
-
-    Esta herramienta llama al microservicio de Spring Boot que busca el producto
-    por su nombre exacto o similar en la base de datos.
+    Ejemplos de frases:
+      - "Crea un producto llamado banano con precio 7000"
+      - "Agregar producto: nombre banano, precio 7000"
+      - "Registrar producto banano, precio 7000"
+      - "Quiero dar de alta el producto banano por 7000"
+      - "Añade producto banano precio 7000"
+      - "Voy a crear un nuevo producto: banano, 7000"
+      - "Alta producto banano 7000"
+      - "Crear producto"
     """
-    def call(self, nombre: str) -> str:
-        return f"BuscarProductoPorNombreTool seleccionada con nombre={nombre}."
+    def call(self, nombre: str, precio: float) -> str:
+        return f"CrearProductoTool crear con nombre={nombre}, precio={precio}."
 
-class BuscarProductoPorPrecioTool(BaseTool):
-    """Busca productos por precio con condición (mayor, menor o igual) llamando al microservicio de Spring Boot."""
-    def call(self, precio: float, condicion: str) -> str:
-        return f"BuscarProductoPorPrecioTool seleccionada con precio={precio}, condicion={condicion}."
-
-    
 
 
 # --- 3. Mapeo entre nombres del LLM y nombres en el servidor ---
 TOOL_NAME_MAP = {
-    "ListarProductosSpringTool": "listar_productos_spring",
-    "BuscarProductoPorIdTool": "buscar_producto_por_id",
-    "BuscarProductoPorNombreTool": "buscar_producto_por_nombre",
-    "BuscarProductoPorPrecioTool": "buscar_producto_por_precio"
+    "CrearProductoPorNombreYPrecioTool": "crear_producto_por_nombre_y_precio"
 }
 
 # --- 4. LLM ---
 @llm.call(
     "google",
     model="gemini-2.5-pro",
-    tools=[ListarProductosSpringTool, BuscarProductoPorIdTool, BuscarProductoPorNombreTool, BuscarProductoPorPrecioTool],
+    tools=[CrearProductoPorNombreYPrecioTool],
 )
 def get_user_intent(query: str):
     return query
@@ -93,6 +71,19 @@ def get_user_intent(query: str):
 # --- 5. Esquema de entrada ---
 class Pregunta(BaseModel):
     texto: str
+
+def log_client(msg):
+    with open("client_debug.log", "a", encoding="utf-8") as f:
+        f.write(msg + "\n")
+
+@app.post("/debug_crear")
+async def debug_crear():
+    server_params = StdioServerParameters(command=sys.executable, args=["server.py"])
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            result = await session.call_tool("crear_producto_por_nombre_y_precio", arguments={"nombre": "banano", "precio": 7000})
+            return {"resultado": str(result)}
 
 # --- 6. Endpoint ---
 @app.post("/preguntar")
@@ -109,6 +100,9 @@ async def preguntar(pregunta: Pregunta):
                 tool_call_info = response.tool.tool_call
                 tool_name = tool_call_info.name
                 tool_args = tool_call_info.args
+
+                log_client(f"tool_name: {tool_name}")
+                log_client(f"tool_args: {tool_args}")
 
                 tool_name_on_server = TOOL_NAME_MAP.get(tool_name)
                 if not tool_name_on_server:
@@ -166,3 +160,5 @@ async def preguntar(pregunta: Pregunta):
 
                 # Si no hay nada retornable
                 return {"error": "La tool no devolvió contenido estructurado ni texto."}
+				
+			
